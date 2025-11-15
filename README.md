@@ -2,7 +2,7 @@
 
 [![Aperçu du site](/public/images/landing-page.png)](https://nathannkombe.tech/)
 
-Nathan Michel — développeur web fullstack. Ce dépôt contient mon portfolio personnel : un site léger, accessible et soigné qui présente mes projets, mon expérience et un moyen simple de me contacter.
+Ce dépôt contient mon portfolio personnel : un site léger, accessible et soigné qui présente mes projets, mon expérience et un moyen simple de me contacter.
 
 ![Portrait](/public/images/nathan2.PNG)
 
