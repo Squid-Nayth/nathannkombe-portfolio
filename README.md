@@ -29,9 +29,9 @@ git clone https://github.com/Squid-Nayth/nathannkombe.tech.git
 
 # Ouvrir `index.html` dans votre navigateur ou lancer un serveur statique
 # Exemple avec Python) :
-python3 -m http.server 8080
+python3 -m http.server 8080 (ou un autre port de libre sur votre machine)
 
-# Puis visiter http://localhost:8080
+# Puis sur votre navigateur tapez : http://localhost:8080
 ```
 Ou utilisez l'extension [LiveServer](https://marketplace.visualstudio.com/items?itemName=ritwickdey.LiveServer) pour Visual Studio Code
 
