@@ -1,10 +1,11 @@
 :root {
-    --color-calendar-graph-day-bg: grey;
-    --color-calendar-graph-day-L1-bg: #0a4208;
-    --color-calendar-graph-day-L2-bg: #047526;
-    --color-calendar-graph-day-L3-bg: #45a045;
-    --color-calendar-graph-day-L4-bg: #39dd34;
-  }
+        /* "Less" level (no contributions) — use a very dark square to blend with site dark theme */
+        --color-calendar-graph-day-bg: #1a1a1a;
+        --color-calendar-graph-day-L1-bg: #0a4208;
+        --color-calendar-graph-day-L2-bg: #047526;
+        --color-calendar-graph-day-L3-bg: #45a045;
+        --color-calendar-graph-day-L4-bg: #39dd34;
+    }
   
   .ContributionCalendar-day[data-level='0'] {
       background-color: var(--color-calendar-graph-day-bg);
