@@ -645,9 +645,11 @@ body.overlay-active footer{
 /* Center the last project card when it's on its own row (odd number of items)
    This keeps the layout balanced when there are 3, 5, ... project cards. */
 .projects-grid > .project-card:last-child:nth-child(odd) {
-  grid-column: 1 / -1; /* span full width */
+  grid-column: 1 / -1; /* span full width area but constrain card size */
   justify-self: center; /* center the card inside the grid area */
-  max-width: 720px; /* avoid the card stretching too wide on large screens */
+  /* Limit the card to the width of a single grid column so it matches other cards */
+  max-width: calc((100% - 1.25rem) / 2);
+  width: 100%;
 }
 .project-card{background:linear-gradient(180deg, #0b0b0b 0%, #070707 100%);border:1px solid rgba(255,255,255,0.04);border-radius:12px;box-shadow:0 12px 30px rgba(2,6,23,0.6);display:flex;gap:1rem;overflow:hidden;align-items:stretch}
 .project-media{flex:0 0 48%;min-width:160px;height:220px;overflow:hidden}
