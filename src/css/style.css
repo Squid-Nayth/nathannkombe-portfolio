@@ -80,6 +80,16 @@ h1, h2, h3, h4, h5, h6, .project-title, .hero-heading, .contact-title, .projects
 .nav-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;width:100%}
 .nav-left .site-title{color:#9ca3af;text-decoration:none;font-weight:800;font-size:0.95rem;padding:8px 6px}
 .nav-right{display:flex;align-items:center;gap:0.45rem}
+
+/* Smoothly animate nav item shifts when the CTA is inserted/removed.
+   Note: browsers cannot animate reflow directly; this rule helps when
+   elements change margin/transform/opacity. It reduces visual jumpiness
+   when nodes are moved into the nav via JS. */
+.site-nav .nav-right > * {
+  /* Use an overshooting bezier to emulate a subtle bounce when items shift */
+  transition: transform .32s cubic-bezier(.34,1.56,.64,1), margin .32s cubic-bezier(.34,1.56,.64,1), opacity .18s ease;
+  will-change: transform, margin, opacity;
+}
 .nav-link{display:inline-flex;align-items:center;justify-content:center;padding:8px;border-radius:8px;text-decoration:none}
 .nav-link img{width:18px;height:18px;display:block;filter:invert(1) brightness(1);opacity:0.95}
 .nav-link:hover{background:rgba(255,255,255,0.02)}
@@ -1207,3 +1217,131 @@ button, .btn, .project-cta, .contact-cta, .github-cta, .download-cv, .btn-send, 
   }
   .hero-heading{font-size:clamp(1.2rem,9.5vw,2.2rem)}
 }
+
+/* Floating contact CTA: appears fixed in top-right when scrolling past the hero
+   - Use a `.floating` modifier added/removed by JS. The top is positioned
+     just below the navbar (measured at runtime). */
+.contact-cta.floating{
+  position:fixed !important;
+  right:20px !important;
+  left:auto !important;
+  margin:0 !important;
+  transform:none !important;
+  z-index:1300 !important; /* above most content but below modals/overlays */
+  box-shadow:0 10px 36px rgba(0,0,0,0.6), 0 2px 6px rgba(0,0,0,0.32) !important;
+  transition: transform .18s ease, top .18s ease, right .18s ease, opacity .2s ease;
+  will-change: top, transform, opacity;
+}
+
+/* Slightly reduce size on very small viewports so it doesn't overlap the nav toggle */
+@media (max-width:420px){
+  .contact-cta.floating{right:12px;padding:0.5rem 0.7rem;font-size:0.92rem}
+}
+
+/* When a global overlay is active (faceid etc.), ensure floating CTA stays hidden */
+body.overlay-active .contact-cta.floating{opacity:0;pointer-events:none}
+
+/* Floating CTA animations: use modifier classes to trigger enter/exit */
+.contact-cta.floating{pointer-events:auto}
+.contact-cta.floating.floating--visible{
+  animation: floating-in .28s cubic-bezier(.2,.9,.25,1) both;
+}
+.contact-cta.floating.floating--hide{
+  animation: floating-out .22s cubic-bezier(.2,.9,.25,1) both;
+}
+
+@keyframes floating-in{
+  0%{opacity:0;transform:translateY(-8px) translateX(8px) scale(.98)}
+  100%{opacity:1;transform:translateY(0) translateX(0) scale(1)}
+}
+
+@keyframes floating-out{
+  0%{opacity:1;transform:translateY(0) translateX(0) scale(1)}
+  100%{opacity:0;transform:translateY(-8px) translateX(6px) scale(.98)}
+}
+
+/* When hidden for overlays, ensure pointer-events remain disabled */
+body.overlay-active .contact-cta.floating{opacity:0;pointer-events:none}
+
+/* Reduce floating CTA size and add a subtle bloom halo similar to other CTAs */
+.contact-cta.floating{
+  padding:0.48rem 0.72rem !important;
+  font-size:0.92rem !important;
+  border-radius:10px !important;
+  min-width:48px;
+  height:auto;
+}
+.contact-cta.floating img{width:16px;height:16px}
+
+/* Bloom halo for floating CTA (smaller than hero halo) */
+.contact-cta.floating::before{
+  content:"";
+  position:absolute;
+  z-index:-1;
+  left:50%;
+  top:50%;
+  transform:translate(-50%,-50%) scale(.98);
+  width:160px;
+  height:48px;
+  background:radial-gradient(circle at center, rgba(0,122,255,0.26) 0%, rgba(0,122,255,0.12) 22%, rgba(0,122,255,0.04) 45%, transparent 70%);
+  filter:blur(12px) saturate(1.05);
+  border-radius:10px;
+  pointer-events:none;
+  opacity:0;
+  transition: opacity .28s cubic-bezier(.2,.9,.25,1), transform .28s cubic-bezier(.2,.9,.25,1);
+}
+
+.contact-cta.floating.floating--visible::before{
+  opacity:0.95;
+  transform:translate(-50%,-50%) scale(1);
+}
+
+.contact-cta.floating.floating--hide::before{
+  opacity:0;
+  transform:translate(-50%,-50%) scale(.98);
+}
+
+@media (max-width:720px) {
+  /* keep floating CTA unobtrusive on smaller tablets */
+  .contact-cta.floating{right:12px;padding:0.46rem 0.64rem;font-size:0.9rem}
+  .contact-cta.floating::before{width:140px;height:44px}
+}
+
+/* When the floating CTA is inserted into the navbar, display it inline with
+   the other nav controls. We use a specific selector so the fixed-floating
+   styles remain the fallback when it's not moved into the nav. */
+.site-nav .contact-cta.floating{
+  position:relative !important;
+  top: auto !important;
+  right: auto !important;
+  left: auto !important;
+  margin: 0 0 0 6px !important; /* small gap after other nav items */
+  padding: 0.45rem 0.9rem !important;
+  font-size: 0.95rem !important;
+  box-shadow: 0 8px 22px rgba(2,6,23,0.6) !important;
+  z-index: 3 !important;
+  height: auto !important;
+  transition: transform .32s cubic-bezier(.34,1.56,.64,1), opacity .18s ease, margin .32s cubic-bezier(.34,1.56,.64,1);
+  will-change: transform, opacity, margin;
+}
+
+/* Small pop/bounce animation for the CTA when it becomes visible inside the nav */
+@keyframes nav-pop {
+  0% { transform: translateY(-8px) scale(0.985); opacity: 0; }
+  60% { transform: translateY(6px) scale(1.02); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.site-nav .contact-cta.floating.floating--visible { animation: nav-pop .36s cubic-bezier(.34,1.56,.64,1) both; }
+
+/* Tighter halo inside the nav so it doesn't overflow */
+.site-nav .contact-cta.floating::before{
+  width:140px;
+  height:40px;
+  filter:blur(10px) saturate(1.02);
+  border-radius:10px;
+  opacity:0.9;
+}
+
+
+

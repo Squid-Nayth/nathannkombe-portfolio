@@ -826,3 +826,187 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 });
 
+
+/* Floating Contact CTA: show fixed CTA top-right after user scrolls past the hero */
+(function () {
+  function initFloatingContact() {
+    const cta = document.querySelector('.contact-cta');
+    const hero = document.querySelector('main.hero') || document.querySelector('.hero');
+    const nav = document.querySelector('.site-nav');
+    if (!cta || !hero) return;
+
+    let scheduled = false;
+    const contactSection = document.getElementById('contact');
+    let hideDueToContact = false;
+    // Avoid repeated DOM work on every scroll frame which causes flicker.
+    // _visible: true when CTA is currently shown (floating--visible applied)
+    // _movedIntoNav: true when CTA has been relocated into the nav DOM
+    let _visible = false;
+    let _movedIntoNav = false;
+
+    // Keep references to restore original position when hiding
+    let _originalParent = null;
+    let _originalNext = null;
+
+    function _storeOriginalPosition() {
+      if (!_originalParent && cta.parentNode) {
+        _originalParent = cta.parentNode;
+        _originalNext = cta.nextSibling;
+      }
+    }
+
+    function showCTA() {
+      // If already visible, avoid toggling classes which restarts animations
+      if (_visible) {
+        // If not yet moved into nav but nav is now available, try to move once
+        if (!_movedIntoNav) {
+          try {
+            const navRight = document.querySelector('.site-nav .nav-right');
+            const navCta = document.querySelector('.site-nav .nav-cta');
+            const navCtaStyle = navCta ? getComputedStyle(navCta) : null;
+            const navCtaRect = navCta ? navCta.getBoundingClientRect() : null;
+            const shouldInsert = navRight && navCta && navCtaRect && navCtaRect.width > 6 && navCtaStyle && navCtaStyle.display !== 'none' && navCtaStyle.visibility !== 'hidden';
+            if (shouldInsert) {
+              if (navCta.parentNode === navRight) navRight.insertBefore(cta, navCta.nextSibling);
+              else navRight.appendChild(cta);
+              _movedIntoNav = true;
+              cta.style.top = '';
+              cta.style.left = '';
+              cta.style.right = '';
+            }
+          } catch (e) { /* ignore */ }
+        }
+        return;
+      }
+
+      // First time becoming visible: store original position and start animation
+      _storeOriginalPosition();
+      if (!cta.classList.contains('floating')) cta.classList.add('floating');
+      cta.classList.remove('floating--hide');
+      // Force reflow only on the transition to visible to ensure animation runs
+      // eslint-disable-next-line no-unused-expressions
+      cta.offsetWidth;
+      cta.classList.add('floating--visible');
+      _visible = true;
+
+      // Attempt to move into nav (one-time) if possible
+      try {
+        const navRight = document.querySelector('.site-nav .nav-right');
+        const navCta = document.querySelector('.site-nav .nav-cta');
+        const navCtaStyle = navCta ? getComputedStyle(navCta) : null;
+        const navCtaRect = navCta ? navCta.getBoundingClientRect() : null;
+        const shouldInsert = navRight && navCta && navCtaRect && navCtaRect.width > 6 && navCtaStyle && navCtaStyle.display !== 'none' && navCtaStyle.visibility !== 'hidden';
+        if (shouldInsert) {
+          if (navCta.parentNode === navRight) navRight.insertBefore(cta, navCta.nextSibling);
+          else navRight.appendChild(cta);
+          _movedIntoNav = true;
+          cta.style.top = '';
+          cta.style.left = '';
+          cta.style.right = '';
+          return;
+        }
+      } catch (e) { /* ignore and fallback */ }
+
+      // Fixed fallback placement
+      const navHeight = nav ? nav.offsetHeight : (parseInt(getComputedStyle(document.documentElement).getPropertyValue('--nav-height')) || 64);
+      cta.style.top = ( (nav ? nav.getBoundingClientRect().top : 0) + navHeight + 8 ) + 'px';
+      cta.style.right = (window.innerWidth <= 420 ? '12px' : '20px');
+      cta.style.left = '';
+    }
+
+    function hideCTA(animated = true) {
+      if (!cta.classList.contains('floating')) return;
+      // If already hidden logically, no-op
+      if (!_visible && !_movedIntoNav) return;
+      cta.classList.remove('floating--visible');
+      if (animated) {
+        const onAnimEnd = function (ev) {
+          if (ev && ev.target !== cta) return;
+          cta.removeEventListener('animationend', onAnimEnd);
+          cta.classList.remove('floating--hide');
+          cta.classList.remove('floating');
+          // If we moved the CTA into the nav, restore it to its original place
+          try {
+            if (_movedIntoNav && _originalParent && _originalParent !== cta.parentNode) {
+              if (_originalNext && _originalNext.parentNode === _originalParent) _originalParent.insertBefore(cta, _originalNext);
+              else _originalParent.appendChild(cta);
+            }
+          } catch (e) { /* ignore restore errors */ }
+          // cleanup inline styles and flags
+          cta.style.top = '';
+          cta.style.left = '';
+          cta.style.right = '';
+          _visible = false;
+          _movedIntoNav = false;
+        };
+        cta.addEventListener('animationend', onAnimEnd);
+        cta.classList.add('floating--hide');
+      } else {
+        cta.classList.remove('floating--hide');
+        cta.classList.remove('floating--visible');
+        cta.classList.remove('floating');
+        try {
+          if (_movedIntoNav && _originalParent && _originalParent !== cta.parentNode) {
+            if (_originalNext && _originalNext.parentNode === _originalParent) _originalParent.insertBefore(cta, _originalNext);
+            else _originalParent.appendChild(cta);
+          }
+        } catch (e) {}
+        cta.style.top = '';
+        cta.style.left = '';
+        cta.style.right = '';
+        _visible = false;
+        _movedIntoNav = false;
+      }
+    }
+
+    function update() {
+      scheduled = false;
+      try {
+        const navHeight = nav ? nav.offsetHeight : (parseInt(getComputedStyle(document.documentElement).getPropertyValue('--nav-height')) || 64);
+        const heroRect = hero.getBoundingClientRect();
+        const heroBottom = window.scrollY + heroRect.bottom;
+        // Show when top of viewport has moved past the hero bottom
+        const scrolledPastHero = window.scrollY > (heroBottom - navHeight - 8);
+        // If contact is currently visible in viewport, we must hide
+        if (hideDueToContact) {
+          if (_visible) hideCTA(true);
+          return;
+        }
+        if (scrolledPastHero) {
+          if (!_visible) showCTA();
+        } else {
+          if (_visible) hideCTA(true);
+        }
+      } catch (e) { /* ignore measurement errors */ }
+    }
+
+    function schedule() { if (!scheduled) { scheduled = true; requestAnimationFrame(update); } }
+
+    // Observe contact section to hide CTA when contact enters viewport
+    if (contactSection && 'IntersectionObserver' in window) {
+      const obs = new IntersectionObserver((entries) => {
+        entries.forEach(en => {
+          if (en.isIntersecting) {
+            hideDueToContact = true;
+            hideCTA(true);
+          } else {
+            hideDueToContact = false;
+            schedule();
+          }
+        });
+      }, { root: null, threshold: 0.06 });
+      try { obs.observe(contactSection); } catch (e) { /* ignore */ }
+    }
+
+    // Listen to scroll/resize to update position/state
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+
+    // Run once to set initial state
+    schedule();
+  }
+
+  if (document.readyState === 'complete' || document.readyState === 'interactive') initFloatingContact();
+  else document.addEventListener('DOMContentLoaded', initFloatingContact);
+})();
+
