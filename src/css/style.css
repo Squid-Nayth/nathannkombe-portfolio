@@ -931,6 +931,50 @@ button:not(.contact-cta):hover,
 .contact-email{color:inherit;text-decoration:underline dotted rgba(255,255,255,0.12);padding-left:4px}
 .contact-link{color:inherit;text-decoration:underline dotted rgba(255,255,255,0.12);margin-left:8px}
 
+.site-title,
+/* Footer links + site title: halo glow behind the text (pill-shaped) on hover
+  - use ::before so the glow sits behind the inline text and matches its width
+  - override the global hover transform/box-shadow so no rectangular halo appears */
+.contact-link,
+.contact-email {
+  position: relative;
+  display: inline-block; /* ensure pseudo-element sizes to text width */
+  padding: 0 4px; /* small breathing room so halo doesn't clip */
+  z-index: 1;
+}
+.site-title::before,
+.contact-link::before,
+.contact-email::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%,-50%) scale(.98);
+  width: calc(100% + 10px);
+  height: calc(100% + 8px);
+  background: radial-gradient(circle at center, rgba(0,122,255,0.22) 0%, rgba(0,122,255,0.08) 40%, rgba(0,122,255,0.02) 70%);
+  filter: blur(10px) saturate(1.08);
+  border-radius: 999px; /* pill shape that hugs text width */
+  opacity: 0;
+  transition: opacity .22s cubic-bezier(.2,.9,.25,1), transform .22s cubic-bezier(.2,.9,.25,1);
+  pointer-events: none;
+  z-index: -1;
+}
+.site-title:hover::before, .site-title:focus::before,
+.contact-link:hover::before, .contact-link:focus::before,
+.contact-email:hover::before, .contact-email:focus::before {
+  opacity: 0.95;
+  transform: translate(-50%,-50%) scale(1);
+}
+.site-title:hover, .site-title:focus,
+.contact-link:hover, .contact-link:focus,
+.contact-email:hover, .contact-email:focus {
+  /* prevent the global rectangular hover shadow/transform from showing */
+  transform: none !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
 @media (max-width:720px){
   .contact-top{flex-direction:row;align-items:center}
   .big-switch{width:72px;height:44px}
@@ -1202,7 +1246,8 @@ button, .btn, .project-cta, .contact-cta, .github-cta, .download-cv, .btn-send, 
   }
 
   /* Reduce heavy decorative pseudo-elements that can overlap/touch on small screens */
-  .contact-cta::before, .project-cta::before, .github-cta::before {
+  .contact-cta::before, .project-cta::before, .github-cta::before,
+  .site-title::before, .contact-link::before, .contact-email::before {
     display: none !important;
   }
 }
@@ -1338,6 +1383,25 @@ body.overlay-active .contact-cta.floating{opacity:0;pointer-events:none}
   border-radius:10px;
   opacity:0.9;
 }
+
+/* Make floating contact CTA inside the navbar match other nav items on hover
+   - add slight lift, scale and bloom (halo) like other CTAs */
+.site-nav .contact-cta.floating{
+  transition: transform .18s ease, filter .12s ease, box-shadow .18s ease, opacity .22s ease;
+  will-change: transform, opacity, box-shadow;
+}
+.site-nav .contact-cta.floating:hover,
+.site-nav .contact-cta.floating:focus{
+  transform: translateY(-4px) scale(1.02);
+  filter: brightness(1.06) saturate(1.02);
+  box-shadow: 0 12px 30px rgba(0,122,255,0.14) !important;
+}
+.site-nav .contact-cta.floating:hover::before,
+.site-nav .contact-cta.floating:focus::before{
+  opacity:0.95;
+  transform:translate3d(-50%,-50%,0) scale(1.03);
+}
+
 
 
 
