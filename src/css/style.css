@@ -81,13 +81,11 @@ h1, h2, h3, h4, h5, h6, .project-title, .hero-heading, .contact-title, .projects
 .nav-left .site-title{color:#9ca3af;text-decoration:none;font-weight:800;font-size:0.95rem;padding:8px 6px}
 .nav-right{display:flex;align-items:center;gap:0.45rem}
 
-/* Smoothly animate nav item shifts when the CTA is inserted/removed.
-   Note: browsers cannot animate reflow directly; this rule helps when
-   elements change margin/transform/opacity. It reduces visual jumpiness
-   when nodes are moved into the nav via JS. */
+/* FLIP-friendly transition for nav items: animate transform so items slide smoothly
+   when a sibling (the floating CTA) is inserted/removed. Use an overshooting easing
+   for a dynamic feel. */
 .site-nav .nav-right > * {
-  /* Use an overshooting bezier to emulate a subtle bounce when items shift */
-  transition: transform .32s cubic-bezier(.34,1.56,.64,1), margin .32s cubic-bezier(.34,1.56,.64,1), opacity .18s ease;
+  transition: transform 380ms cubic-bezier(.22,1.4,.36,1), margin 320ms cubic-bezier(.22,1.4,.36,1), opacity 180ms ease;
   will-change: transform, margin, opacity;
 }
 .nav-link{display:inline-flex;align-items:center;justify-content:center;padding:8px;border-radius:8px;text-decoration:none}
@@ -1229,8 +1227,11 @@ button, .btn, .project-cta, .contact-cta, .github-cta, .download-cv, .btn-send, 
   transform:none !important;
   z-index:1300 !important; /* above most content but below modals/overlays */
   box-shadow:0 10px 36px rgba(0,0,0,0.6), 0 2px 6px rgba(0,0,0,0.32) !important;
-  transition: transform .18s ease, top .18s ease, right .18s ease, opacity .2s ease;
-  will-change: top, transform, opacity;
+  transition: opacity .22s cubic-bezier(.2,.9,.25,1), transform .24s cubic-bezier(.2,.9,.25,1);
+  /* Hint the browser about animated properties and promote to its own layer to avoid paint flicker */
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  transform: translate3d(0,0,0);
 }
 
 /* Slightly reduce size on very small viewports so it doesn't overlap the nav toggle */
@@ -1245,19 +1246,23 @@ body.overlay-active .contact-cta.floating{opacity:0;pointer-events:none}
 .contact-cta.floating{pointer-events:auto}
 .contact-cta.floating.floating--visible{
   animation: floating-in .28s cubic-bezier(.2,.9,.25,1) both;
+  /* ensure compositing of the element during the animation */
+  will-change: transform, opacity;
 }
 .contact-cta.floating.floating--hide{
   animation: floating-out .22s cubic-bezier(.2,.9,.25,1) both;
+  will-change: transform, opacity;
 }
 
 @keyframes floating-in{
-  0%{opacity:0;transform:translateY(-8px) translateX(8px) scale(.98)}
-  100%{opacity:1;transform:translateY(0) translateX(0) scale(1)}
+  0%{opacity:0;transform:translate3d(8px,-8px,0) scale(.98)}
+  60%{opacity:1;transform:translate3d(-4px,4px,0) scale(1.02)}
+  100%{opacity:1;transform:translate3d(0,0,0) scale(1)}
 }
 
 @keyframes floating-out{
-  0%{opacity:1;transform:translateY(0) translateX(0) scale(1)}
-  100%{opacity:0;transform:translateY(-8px) translateX(6px) scale(.98)}
+  0%{opacity:1;transform:translate3d(0,0,0) scale(1)}
+  100%{opacity:0;transform:translate3d(6px,-8px,0) scale(.98)}
 }
 
 /* When hidden for overlays, ensure pointer-events remain disabled */
@@ -1280,7 +1285,7 @@ body.overlay-active .contact-cta.floating{opacity:0;pointer-events:none}
   z-index:-1;
   left:50%;
   top:50%;
-  transform:translate(-50%,-50%) scale(.98);
+  transform:translate3d(-50%,-50%,0) scale(.98);
   width:160px;
   height:48px;
   background:radial-gradient(circle at center, rgba(0,122,255,0.26) 0%, rgba(0,122,255,0.12) 22%, rgba(0,122,255,0.04) 45%, transparent 70%);
@@ -1289,16 +1294,18 @@ body.overlay-active .contact-cta.floating{opacity:0;pointer-events:none}
   pointer-events:none;
   opacity:0;
   transition: opacity .28s cubic-bezier(.2,.9,.25,1), transform .28s cubic-bezier(.2,.9,.25,1);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
 }
 
 .contact-cta.floating.floating--visible::before{
   opacity:0.95;
-  transform:translate(-50%,-50%) scale(1);
+  transform:translate3d(-50%,-50%,0) scale(1);
 }
 
 .contact-cta.floating.floating--hide::before{
   opacity:0;
-  transform:translate(-50%,-50%) scale(.98);
+  transform:translate3d(-50%,-50%,0) scale(.98);
 }
 
 @media (max-width:720px) {
@@ -1321,18 +1328,7 @@ body.overlay-active .contact-cta.floating{opacity:0;pointer-events:none}
   box-shadow: 0 8px 22px rgba(2,6,23,0.6) !important;
   z-index: 3 !important;
   height: auto !important;
-  transition: transform .32s cubic-bezier(.34,1.56,.64,1), opacity .18s ease, margin .32s cubic-bezier(.34,1.56,.64,1);
-  will-change: transform, opacity, margin;
 }
-
-/* Small pop/bounce animation for the CTA when it becomes visible inside the nav */
-@keyframes nav-pop {
-  0% { transform: translateY(-8px) scale(0.985); opacity: 0; }
-  60% { transform: translateY(6px) scale(1.02); opacity: 1; }
-  100% { transform: translateY(0) scale(1); opacity: 1; }
-}
-
-.site-nav .contact-cta.floating.floating--visible { animation: nav-pop .36s cubic-bezier(.34,1.56,.64,1) both; }
 
 /* Tighter halo inside the nav so it doesn't overflow */
 .site-nav .contact-cta.floating::before{

@@ -613,6 +613,22 @@ function initHeroPopper() {
 runAfterFaceID(() => {
   initRevealOnScroll();
   initHeroPopper();
+
+  // Safety fallback: ensure hero CTA becomes visible if it wasn't shown
+  // by the hero popper (race conditions or slow FaceID flow). Respect
+  // reduced-motion and overlay-active states.
+  try {
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!prefersReduced) {
+      setTimeout(() => {
+        const cta = document.querySelector('.contact-cta');
+        if (!cta) return;
+        // don't override if overlay is active
+        if (document.body.classList.contains('overlay-active')) return;
+        if (!cta.classList.contains('is-visible')) cta.classList.add('is-visible');
+      }, 900);
+    }
+  } catch (e) { /* ignore fallback errors */ }
 });
 
 // Note: hero scroll hint removed.
@@ -844,9 +860,77 @@ document.addEventListener('DOMContentLoaded', function () {
     let _visible = false;
     let _movedIntoNav = false;
 
-    // Keep references to restore original position when hiding
+    // Keep references to restore original position when hiding (we still record
+    // for analytics/debug but we will not move the original hero CTA; instead
+    // we create a clone to use as a floating CTA so the hero button never
+    // disappears from the DOM.)
     let _originalParent = null;
     let _originalNext = null;
+    // clone used as floating CTA so the hero CTA remains in place
+    let _clone = null;
+
+    // FLIP helpers: compute rects and animate transforms so items visibly move
+    function _rectsFor(nodes) {
+      const map = new Map();
+      nodes.forEach(n => {
+        const r = n.getBoundingClientRect();
+        map.set(n, { left: r.left, top: r.top, width: r.width, height: r.height });
+      });
+      return map;
+    }
+
+    function _applyFlipAnimation(beforeMap, afterNodes, opts) {
+      opts = opts || {};
+      const duration = opts.duration || 380;
+      const easing = opts.easing || 'cubic-bezier(.22,1.4,.36,1)';
+
+      return new Promise((resolve) => {
+        // For each element now in afterNodes, compute delta from before (if any)
+        const animated = [];
+        afterNodes.forEach(el => {
+          if (!beforeMap.has(el)) return; // new nodes (like CTA) can be skipped
+          const before = beforeMap.get(el);
+          const r = el.getBoundingClientRect();
+          const dx = before.left - r.left;
+          const dy = before.top - r.top;
+          if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
+          // apply inverse transform so element appears at its old position
+          el.style.transform = `translate(${dx}px, ${dy}px)`;
+          el.style.transition = 'none';
+          // Force a reflow so the transform takes effect
+          // eslint-disable-next-line no-unused-expressions
+          el.offsetWidth;
+          // then animate to natural position
+          el.style.transition = `transform ${duration}ms ${easing}`;
+          el.style.transform = '';
+          animated.push(el);
+        });
+
+        // If nothing to animate, resolve immediately
+        if (!animated.length) return resolve();
+
+        let remaining = animated.length;
+        const onEnd = function (ev) {
+          const el = ev.currentTarget;
+          el.removeEventListener('transitionend', onEnd);
+          // cleanup inline styles
+          el.style.transition = '';
+          el.style.transform = '';
+          remaining -= 1;
+          if (remaining <= 0) resolve();
+        };
+
+        animated.forEach(el => el.addEventListener('transitionend', onEnd));
+        // safety timeout to cleanup in case transitionend doesn't fire
+        setTimeout(() => {
+          animated.forEach(el => {
+            el.style.transition = '';
+            el.style.transform = '';
+          });
+          resolve();
+        }, duration + 80);
+      });
+    }
 
     function _storeOriginalPosition() {
       if (!_originalParent && cta.parentNode) {
@@ -855,105 +939,99 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     }
 
-    function showCTA() {
-      // If already visible, avoid toggling classes which restarts animations
-      if (_visible) {
-        // If not yet moved into nav but nav is now available, try to move once
-        if (!_movedIntoNav) {
-          try {
-            const navRight = document.querySelector('.site-nav .nav-right');
-            const navCta = document.querySelector('.site-nav .nav-cta');
-            const navCtaStyle = navCta ? getComputedStyle(navCta) : null;
-            const navCtaRect = navCta ? navCta.getBoundingClientRect() : null;
-            const shouldInsert = navRight && navCta && navCtaRect && navCtaRect.width > 6 && navCtaStyle && navCtaStyle.display !== 'none' && navCtaStyle.visibility !== 'hidden';
-            if (shouldInsert) {
-              if (navCta.parentNode === navRight) navRight.insertBefore(cta, navCta.nextSibling);
-              else navRight.appendChild(cta);
-              _movedIntoNav = true;
-              cta.style.top = '';
-              cta.style.left = '';
-              cta.style.right = '';
-            }
-          } catch (e) { /* ignore */ }
-        }
-        return;
-      }
+    async function showCTA() {
+      // If already visible, nothing to do (clone persists). If we haven't
+      // created a clone yet, fallthrough to create one.
+      if (_visible && _clone) return;
 
-      // First time becoming visible: store original position and start animation
       _storeOriginalPosition();
-      if (!cta.classList.contains('floating')) cta.classList.add('floating');
-      cta.classList.remove('floating--hide');
-      // Force reflow only on the transition to visible to ensure animation runs
-      // eslint-disable-next-line no-unused-expressions
-      cta.offsetWidth;
-      cta.classList.add('floating--visible');
       _visible = true;
 
-      // Attempt to move into nav (one-time) if possible
+      // create clone element to show as floating CTA (leave hero CTA in place)
+      if (!_clone) {
+        try {
+          _clone = cta.cloneNode(true);
+          // ensure clone starts hidden and is used only for floating behavior
+          _clone.classList.add('floating');
+          _clone.classList.remove('is-visible');
+          _clone.classList.remove('floating--visible');
+          _clone.classList.remove('floating--hide');
+          if (_clone.id) _clone.removeAttribute('id');
+        } catch (e) { _clone = null; }
+      }
+
+      // Try to insert clone into nav using FLIP if possible
       try {
         const navRight = document.querySelector('.site-nav .nav-right');
         const navCta = document.querySelector('.site-nav .nav-cta');
         const navCtaStyle = navCta ? getComputedStyle(navCta) : null;
         const navCtaRect = navCta ? navCta.getBoundingClientRect() : null;
-        const shouldInsert = navRight && navCta && navCtaRect && navCtaRect.width > 6 && navCtaStyle && navCtaStyle.display !== 'none' && navCtaStyle.visibility !== 'hidden';
+        const shouldInsert = _clone && navRight && navCta && navCtaRect && navCtaRect.width > 6 && navCtaStyle && navCtaStyle.display !== 'none' && navCtaStyle.visibility !== 'hidden';
         if (shouldInsert) {
-          if (navCta.parentNode === navRight) navRight.insertBefore(cta, navCta.nextSibling);
-          else navRight.appendChild(cta);
+          // capture positions of existing nav children before DOM change
+          const beforeMap = _rectsFor(Array.from(navRight.children));
+          if (navCta.parentNode === navRight) navRight.insertBefore(_clone, navCta.nextSibling);
+          else navRight.appendChild(_clone);
+          // after insertion: animate other items from their previous positions
+          const afterNodes = Array.from(navRight.children);
           _movedIntoNav = true;
-          cta.style.top = '';
-          cta.style.left = '';
-          cta.style.right = '';
+          try {
+            // wait for nav elements to animate into their new positions, then reveal the clone
+            await _applyFlipAnimation(beforeMap, afterNodes, { duration: 380 });
+            if (_clone && _visible) _clone.classList.add('floating--visible');
+          } catch (e) {
+            if (_clone && _visible) _clone.classList.add('floating--visible');
+          }
           return;
         }
       } catch (e) { /* ignore and fallback */ }
 
-      // Fixed fallback placement
-      const navHeight = nav ? nav.offsetHeight : (parseInt(getComputedStyle(document.documentElement).getPropertyValue('--nav-height')) || 64);
-      cta.style.top = ( (nav ? nav.getBoundingClientRect().top : 0) + navHeight + 8 ) + 'px';
-      cta.style.right = (window.innerWidth <= 420 ? '12px' : '20px');
-      cta.style.left = '';
+      // Fallback: fixed clone placement under navbar
+      try {
+        if (_clone) {
+          document.body.appendChild(_clone);
+          const navHeight = nav ? nav.offsetHeight : (parseInt(getComputedStyle(document.documentElement).getPropertyValue('--nav-height')) || 64);
+          _clone.style.position = 'fixed';
+          _clone.style.top = ( (nav ? nav.getBoundingClientRect().top : 0) + navHeight + 8 ) + 'px';
+          _clone.style.right = (window.innerWidth <= 420 ? '12px' : '20px');
+          _clone.style.left = '';
+          requestAnimationFrame(() => { if (_clone) _clone.classList.add('floating--visible'); });
+        }
+      } catch (e) { /* ignore fallback errors */ }
     }
 
     function hideCTA(animated = true) {
-      if (!cta.classList.contains('floating')) return;
-      // If already hidden logically, no-op
-      if (!_visible && !_movedIntoNav) return;
-      cta.classList.remove('floating--visible');
+      // If we never created a clone, nothing to hide
+      if (!_clone) { _visible = false; _movedIntoNav = false; return; }
+      // remove visible class so hide animation plays on clone
+      _clone.classList.remove('floating--visible');
       if (animated) {
         const onAnimEnd = function (ev) {
-          if (ev && ev.target !== cta) return;
-          cta.removeEventListener('animationend', onAnimEnd);
-          cta.classList.remove('floating--hide');
-          cta.classList.remove('floating');
-          // If we moved the CTA into the nav, restore it to its original place
+          if (ev && ev.target !== _clone) return;
+          _clone.removeEventListener('animationend', onAnimEnd);
+          // If clone was inserted into nav, FLIP animate remaining siblings
           try {
-            if (_movedIntoNav && _originalParent && _originalParent !== cta.parentNode) {
-              if (_originalNext && _originalNext.parentNode === _originalParent) _originalParent.insertBefore(cta, _originalNext);
-              else _originalParent.appendChild(cta);
+            const navRight = document.querySelector('.site-nav .nav-right');
+            if (_movedIntoNav && navRight && navRight.contains(_clone)) {
+              const beforeMap = _rectsFor(Array.from(navRight.children));
+              _clone.parentNode.removeChild(_clone);
+              const afterNodes = Array.from(navRight.children);
+              _applyFlipAnimation(beforeMap, afterNodes, { duration: 380 });
+            } else {
+              // clone might be appended to body as fixed fallback
+              if (_clone.parentNode) _clone.parentNode.removeChild(_clone);
             }
-          } catch (e) { /* ignore restore errors */ }
-          // cleanup inline styles and flags
-          cta.style.top = '';
-          cta.style.left = '';
-          cta.style.right = '';
+          } catch (e) { try { if (_clone.parentNode) _clone.parentNode.removeChild(_clone); } catch (e2) {} }
+
+          _clone = null;
           _visible = false;
           _movedIntoNav = false;
         };
-        cta.addEventListener('animationend', onAnimEnd);
-        cta.classList.add('floating--hide');
+        _clone.addEventListener('animationend', onAnimEnd);
+        _clone.classList.add('floating--hide');
       } else {
-        cta.classList.remove('floating--hide');
-        cta.classList.remove('floating--visible');
-        cta.classList.remove('floating');
-        try {
-          if (_movedIntoNav && _originalParent && _originalParent !== cta.parentNode) {
-            if (_originalNext && _originalNext.parentNode === _originalParent) _originalParent.insertBefore(cta, _originalNext);
-            else _originalParent.appendChild(cta);
-          }
-        } catch (e) {}
-        cta.style.top = '';
-        cta.style.left = '';
-        cta.style.right = '';
+        try { if (_clone.parentNode) _clone.parentNode.removeChild(_clone); } catch (e) {}
+        _clone = null;
         _visible = false;
         _movedIntoNav = false;
       }
